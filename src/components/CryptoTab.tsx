@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Lock,
   Unlock,
@@ -13,9 +13,11 @@ import {
   ImagePlus,
   X,
   ScanLine,
+  Timer,
 } from 'lucide-react';
 import { encrypt, decrypt, generateKey } from '../utils/crypto';
 import { readQrFromFile } from '../utils/qrReader';
+import { saveKey, loadKey, clearKey, getExpiry, getRemainingMs } from '../utils/keyStore';
 
 interface CryptoTabProps {
   initialDecryptText?: string;
@@ -23,6 +25,13 @@ interface CryptoTabProps {
 }
 
 type Mode = 'encrypt' | 'decrypt';
+
+function formatTimeLeft(ms: number): string {
+  const totalSec = Math.ceil(ms / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${min}:${sec.toString().padStart(2, '0')}`;
+}
 
 export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }: CryptoTabProps) {
   const [mode, setMode] = useState<Mode>(initialDecryptText ? 'decrypt' : 'encrypt');
@@ -36,15 +45,103 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
   const [processing, setProcessing] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrFileName, setQrFileName] = useState<string | null>(null);
+  const [keyTimeLeft, setKeyTimeLeft] = useState<number | null>(null);
+  const [keyLoaded, setKeyLoaded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const autoDecryptRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startExpiryTimer = useCallback(async () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    const expiry = await getExpiry();
+    if (!expiry) {
+      setKeyTimeLeft(null);
+      return;
+    }
+
+    setKeyTimeLeft(getRemainingMs(expiry));
+
+    timerRef.current = setInterval(async () => {
+      const remaining = getRemainingMs(expiry);
+      if (remaining <= 0) {
+        if (timerRef.current) clearInterval(timerRef.current);
+        timerRef.current = null;
+        setKeyTimeLeft(null);
+        setKey('');
+        await clearKey();
+      } else {
+        setKeyTimeLeft(remaining);
+      }
+    }, 1000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const stored = await loadKey();
+      if (stored) {
+        setKey(stored);
+        await startExpiryTimer();
+      }
+      setKeyLoaded(true);
+    })();
+  }, [startExpiryTimer]);
 
   useEffect(() => {
     if (initialDecryptText) {
       setMode('decrypt');
       setInput(initialDecryptText);
+      autoDecryptRef.current = true;
       onDecryptTextConsumed?.();
     }
   }, [initialDecryptText, onDecryptTextConsumed]);
+
+  const runDecrypt = useCallback(async (ciphertext: string, password: string) => {
+    setError('');
+    setOutput('');
+    setProcessing(true);
+    try {
+      const result = await decrypt(ciphertext.trim(), password);
+      setOutput(result);
+    } catch {
+      setError('Decryption failed. Check your key and ciphertext.');
+    } finally {
+      setProcessing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!keyLoaded) return;
+    if (!autoDecryptRef.current) return;
+    if (!key.trim() || !input.trim()) return;
+    if (mode !== 'decrypt') return;
+
+    autoDecryptRef.current = false;
+    runDecrypt(input, key);
+  }, [keyLoaded, key, input, mode, runDecrypt]);
+
+  const handleSaveKey = useCallback(async (newKey: string) => {
+    setKey(newKey);
+    setError('');
+    if (newKey.trim()) {
+      await saveKey(newKey);
+      await startExpiryTimer();
+    }
+  }, [startExpiryTimer]);
+
+  const handleClearKey = useCallback(async () => {
+    setKey('');
+    setKeyTimeLeft(null);
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = null;
+    await clearKey();
+  }, []);
 
   const handleCopyKey = async () => {
     if (!key) return;
@@ -53,8 +150,9 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
     setTimeout(() => setKeyCopied(false), 2000);
   };
 
-  const handleGenerateKey = () => {
-    setKey(generateKey());
+  const handleGenerateKey = async () => {
+    const newKey = generateKey();
+    await handleSaveKey(newKey);
     setShowKey(true);
   };
 
@@ -74,6 +172,8 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
       setError('Please enter text to ' + mode);
       return;
     }
+
+    await handleSaveKey(key);
 
     setError('');
     setOutput('');
@@ -111,6 +211,9 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
       const data = await readQrFromFile(file);
       if (data) {
         setInput(data);
+        if (key.trim()) {
+          autoDecryptRef.current = true;
+        }
       } else {
         setError('No QR code found in this image. Try a clearer image.');
         setQrFileName(null);
@@ -214,15 +317,30 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
       )}
 
       <div className="mb-3">
-        <label className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1.5 block">
-          Encryption Key
-        </label>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">
+            Encryption Key
+          </label>
+          {keyTimeLeft !== null && (
+            <div className="flex items-center gap-1 text-[10px] text-amber-400/80">
+              <Timer className="w-2.5 h-2.5" />
+              <span>{formatTimeLeft(keyTimeLeft)}</span>
+              <button
+                onClick={handleClearKey}
+                className="ml-0.5 text-slate-500 hover:text-red-400 transition-colors"
+                title="Clear saved key"
+              >
+                <X className="w-2.5 h-2.5" />
+              </button>
+            </div>
+          )}
+        </div>
         <div className="flex gap-1.5">
           <div className="relative flex-1">
             <input
               type={showKey ? 'text' : 'password'}
               value={key}
-              onChange={(e) => { setKey(e.target.value); setError(''); }}
+              onChange={(e) => handleSaveKey(e.target.value)}
               placeholder="Enter your encryption key..."
               className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 pr-8 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/20 transition-colors"
             />
@@ -296,7 +414,7 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
         <div className="mt-3">
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">
-              {mode === 'encrypt' ? 'Encrypted Output' : 'Decrypted Output'}
+              {mode === 'encrypt' ? 'Encrypted Output' : 'Decrypted Message'}
             </label>
             <button
               onClick={handleCopyOutput}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Check, ExternalLink, KeyRound } from 'lucide-react';
+import { Copy, Check, ExternalLink, KeyRound, Unlock } from 'lucide-react';
 
 interface ScanResultProps {
   data: string;
@@ -62,15 +62,6 @@ export default function ScanResult({ data, index, onDecrypt }: ScanResultProps) 
           </p>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-          {encrypted && onDecrypt && (
-            <button
-              onClick={() => onDecrypt(data)}
-              className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-amber-400 transition-colors"
-              title="Decrypt this data"
-            >
-              <KeyRound className="w-3.5 h-3.5" />
-            </button>
-          )}
           {url && (
             <button
               onClick={() => chrome.tabs.create({ url })}
@@ -93,6 +84,15 @@ export default function ScanResult({ data, index, onDecrypt }: ScanResultProps) 
           </button>
         </div>
       </div>
+      {encrypted && onDecrypt && (
+        <button
+          onClick={() => onDecrypt(data)}
+          className="mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 hover:border-amber-500/35 transition-all active:scale-[0.98]"
+        >
+          <Unlock className="w-3 h-3" />
+          Decrypt with saved key
+        </button>
+      )}
     </div>
   );
 }
