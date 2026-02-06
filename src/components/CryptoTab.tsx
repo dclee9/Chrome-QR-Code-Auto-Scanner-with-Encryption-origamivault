@@ -26,6 +26,15 @@ interface CryptoTabProps {
 
 type Mode = 'encrypt' | 'decrypt';
 
+const BASE64_RE = /^[A-Za-z0-9+/\n\r]+=*$/;
+const MIN_CIPHER_LEN = 40;
+
+function looksLikeCiphertext(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < MIN_CIPHER_LEN) return false;
+  return BASE64_RE.test(trimmed);
+}
+
 function formatTimeLeft(ms: number): string {
   const totalSec = Math.ceil(ms / 1000);
   const min = Math.floor(totalSec / 60);
@@ -50,6 +59,7 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
   const [keyLoaded, setKeyLoaded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const autoDecryptRef = useRef(false);
+  const lastAutoDecryptedRef = useRef<string>('');
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startExpiryTimer = useCallback(async () => {
@@ -126,6 +136,17 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
     autoDecryptRef.current = false;
     runDecrypt(input, key);
   }, [keyLoaded, key, input, mode, runDecrypt]);
+
+  useEffect(() => {
+    if (mode !== 'decrypt') return;
+    if (!keyLoaded || !key.trim()) return;
+    const trimmed = input.trim();
+    if (!trimmed || trimmed === lastAutoDecryptedRef.current) return;
+    if (!looksLikeCiphertext(trimmed)) return;
+
+    lastAutoDecryptedRef.current = trimmed;
+    runDecrypt(input, key);
+  }, [mode, keyLoaded, key, input, runDecrypt]);
 
   const handleSaveKey = useCallback(async (newKey: string) => {
     setKey(newKey);
@@ -254,6 +275,7 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
     setOutput('');
     setError('');
     setQrFileName(null);
+    lastAutoDecryptedRef.current = '';
   };
 
   return (
