@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Lock,
   Unlock,
@@ -10,8 +10,12 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   AlertCircle,
+  ImagePlus,
+  X,
+  ScanLine,
 } from 'lucide-react';
 import { encrypt, decrypt, generateKey } from '../utils/crypto';
+import { readQrFromFile } from '../utils/qrReader';
 
 interface CryptoTabProps {
   initialDecryptText?: string;
@@ -30,6 +34,9 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
   const [outputCopied, setOutputCopied] = useState(false);
   const [error, setError] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrFileName, setQrFileName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (initialDecryptText) {
@@ -91,11 +98,47 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
     }
   };
 
+  const handleQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError('');
+    setOutput('');
+    setQrLoading(true);
+    setQrFileName(file.name);
+
+    try {
+      const data = await readQrFromFile(file);
+      if (data) {
+        setInput(data);
+      } else {
+        setError('No QR code found in this image. Try a clearer image.');
+        setQrFileName(null);
+      }
+    } catch {
+      setError('Failed to read image file.');
+      setQrFileName(null);
+    } finally {
+      setQrLoading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const clearQrFile = () => {
+    setQrFileName(null);
+    setInput('');
+    setOutput('');
+    setError('');
+  };
+
   const switchMode = (newMode: Mode) => {
     setMode(newMode);
     setInput('');
     setOutput('');
     setError('');
+    setQrFileName(null);
   };
 
   return (
@@ -125,6 +168,51 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
         </button>
       </div>
 
+      {mode === 'decrypt' && (
+        <div className="mb-3">
+          <label className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+            <ScanLine className="w-3 h-3" /> Load from QR Image
+          </label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleQrUpload}
+            className="hidden"
+          />
+          {qrFileName ? (
+            <div className="flex items-center gap-2 bg-teal-500/10 border border-teal-500/25 rounded-lg px-3 py-2">
+              <ScanLine className="w-3.5 h-3.5 text-teal-400 flex-shrink-0" />
+              <span className="text-xs text-teal-300 truncate flex-1">{qrFileName}</span>
+              <button
+                onClick={clearQrFile}
+                className="text-slate-400 hover:text-red-400 transition-colors flex-shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={qrLoading}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-dashed border-slate-600 bg-slate-800/50 text-slate-400 hover:text-teal-300 hover:border-teal-500/40 hover:bg-teal-500/5 transition-all text-xs"
+            >
+              {qrLoading ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-teal-400 border-t-transparent rounded-full animate-spin" />
+                  Reading QR code...
+                </>
+              ) : (
+                <>
+                  <ImagePlus className="w-3.5 h-3.5" />
+                  Upload QR code image
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="mb-3">
         <label className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1.5 block">
           Encryption Key
@@ -153,13 +241,15 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
           >
             {keyCopied ? <Check className="w-3.5 h-3.5 text-teal-400" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
-          <button
-            onClick={handleGenerateKey}
-            className="px-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-amber-400 hover:border-amber-500/30 transition-colors"
-            title="Generate random key"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
+          {mode === 'encrypt' && (
+            <button
+              onClick={handleGenerateKey}
+              className="px-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-amber-400 hover:border-amber-500/30 transition-colors"
+              title="Generate random key"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -174,7 +264,7 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
         <textarea
           value={input}
           onChange={(e) => { setInput(e.target.value); setError(''); }}
-          placeholder={mode === 'encrypt' ? 'Text to encrypt...' : 'Paste encrypted text here...'}
+          placeholder={mode === 'encrypt' ? 'Text to encrypt...' : 'Paste encrypted text or upload a QR image above...'}
           rows={3}
           className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/20 transition-colors resize-none font-mono leading-relaxed"
         />
