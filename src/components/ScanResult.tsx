@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { Copy, Check, ExternalLink, KeyRound, Unlock } from 'lucide-react';
+import { Copy, Check, ExternalLink, Unlock, Type, ScanLine } from 'lucide-react';
+
+type ResultType = 'qr' | 'text';
 
 interface ScanResultProps {
   data: string;
   index: number;
+  type?: ResultType;
   onDecrypt?: (data: string) => void;
 }
 
@@ -26,7 +29,7 @@ function looksEncrypted(text: string): boolean {
   }
 }
 
-export default function ScanResult({ data, index, onDecrypt }: ScanResultProps) {
+export default function ScanResult({ data, index, type = 'qr', onDecrypt }: ScanResultProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -37,14 +40,20 @@ export default function ScanResult({ data, index, onDecrypt }: ScanResultProps) 
 
   const url = isUrl(data) ? data : null;
   const encrypted = looksEncrypted(data);
+  const isText = type === 'text';
 
   return (
     <div className="px-5 py-3 hover:bg-slate-800/50 transition-colors group">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <span className="text-[10px] font-medium text-teal-400 bg-teal-400/10 px-1.5 py-0.5 rounded">
-              QR #{index + 1}
+            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded flex items-center gap-1 ${
+              isText
+                ? 'text-sky-400 bg-sky-400/10'
+                : 'text-teal-400 bg-teal-400/10'
+            }`}>
+              {isText ? <Type className="w-2.5 h-2.5" /> : <ScanLine className="w-2.5 h-2.5" />}
+              {isText ? `Text #${index + 1}` : `QR #${index + 1}`}
             </span>
             {url && (
               <span className="text-[10px] text-sky-400 bg-sky-400/10 px-1.5 py-0.5 rounded">
@@ -61,7 +70,7 @@ export default function ScanResult({ data, index, onDecrypt }: ScanResultProps) 
             {data}
           </p>
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1 flex-shrink-0">
           {url && (
             <button
               onClick={() => chrome.tabs.create({ url })}
@@ -73,11 +82,15 @@ export default function ScanResult({ data, index, onDecrypt }: ScanResultProps) 
           )}
           <button
             onClick={handleCopy}
-            className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-teal-400 transition-colors"
+            className={`p-1.5 rounded-md transition-colors ${
+              copied
+                ? 'bg-teal-500/10 text-teal-400'
+                : 'hover:bg-slate-700 text-slate-400 hover:text-teal-400'
+            }`}
             title="Copy to clipboard"
           >
             {copied ? (
-              <Check className="w-3.5 h-3.5 text-teal-400" />
+              <Check className="w-3.5 h-3.5" />
             ) : (
               <Copy className="w-3.5 h-3.5" />
             )}

@@ -6,17 +6,37 @@ interface QrResult {
   imageUrl: string;
 }
 
+interface TextResult {
+  data: string;
+  source: 'text';
+}
+
+const BASE64_RE = /^[A-Za-z0-9+/\n\r]+=*$/;
+const MIN_CIPHER_LEN = 40;
+
+function looksLikeCiphertext(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < MIN_CIPHER_LEN) return false;
+  if (trimmed.includes(' ') && trimmed.split(' ').length > 3) return false;
+  return BASE64_RE.test(trimmed);
+}
+
 let isEnabled = false;
 let isScanning = false;
 let results: QrResult[] = [];
+let textResults: TextResult[] = [];
 let scannedImages = new Set<HTMLImageElement>();
+let scannedTextNodes = new WeakSet<Element>();
 let imageCount = 0;
+let textElementCount = 0;
 let observer: MutationObserver | null = null;
 
 function getState() {
   return {
     results: [...results],
+    textResults: [...textResults],
     imageCount,
+    textElementCount,
     scanning: isScanning,
   };
 }
@@ -44,6 +64,30 @@ async function scanImage(img: HTMLImageElement) {
   }
 }
 
+function scanTextElements() {
+  const textSelectors = 'p, span, div, pre, code, td, li, blockquote, a';
+  const elements = document.querySelectorAll<HTMLElement>(textSelectors);
+
+  for (const el of elements) {
+    if (scannedTextNodes.has(el)) continue;
+    if (el.children.length > 0 && el.querySelector(textSelectors)) continue;
+
+    const text = el.textContent?.trim();
+    if (!text) continue;
+
+    scannedTextNodes.add(el);
+    textElementCount++;
+
+    if (looksLikeCiphertext(text)) {
+      const alreadyFound = textResults.some((r) => r.data === text);
+      if (!alreadyFound) {
+        textResults.push({ data: text, source: 'text' });
+        updateBadge();
+      }
+    }
+  }
+}
+
 async function scanAllImages() {
   if (!isEnabled || isScanning) return;
   isScanning = true;
@@ -62,6 +106,8 @@ async function scanAllImages() {
     }
   }
 
+  scanTextElements();
+
   await Promise.allSettled(promises);
   isScanning = false;
 }
@@ -69,7 +115,7 @@ async function scanAllImages() {
 function updateBadge() {
   chrome.runtime.sendMessage({
     type: 'UPDATE_BADGE',
-    count: results.length,
+    count: results.length + textResults.length,
   }).catch(() => {});
 }
 
@@ -77,18 +123,23 @@ function startObserving() {
   if (observer) return;
 
   observer = new MutationObserver((mutations) => {
+    let hasNewNodes = false;
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
         if (node instanceof HTMLImageElement) {
           scheduleImageScan(node);
         }
         if (node instanceof HTMLElement) {
+          hasNewNodes = true;
           const imgs = node.querySelectorAll<HTMLImageElement>('img');
           for (const img of imgs) {
             scheduleImageScan(img);
           }
         }
       }
+    }
+    if (hasNewNodes) {
+      scanTextElements();
     }
   });
 
@@ -119,8 +170,11 @@ function reset() {
   stopObserving();
   removeAllOverlays();
   results = [];
+  textResults = [];
   scannedImages = new Set();
+  scannedTextNodes = new WeakSet();
   imageCount = 0;
+  textElementCount = 0;
   isScanning = false;
 }
 

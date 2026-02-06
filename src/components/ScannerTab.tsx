@@ -1,4 +1,4 @@
-import { ScanLine } from 'lucide-react';
+import { ScanLine, Type } from 'lucide-react';
 import Toggle from './Toggle';
 import ScanResult from './ScanResult';
 
@@ -7,9 +7,16 @@ interface QrResult {
   imageUrl: string;
 }
 
+interface TextResult {
+  data: string;
+  source: 'text';
+}
+
 interface TabResults {
   results: QrResult[];
+  textResults: TextResult[];
   imageCount: number;
+  textElementCount: number;
   scanning: boolean;
 }
 
@@ -21,6 +28,8 @@ interface ScannerTabProps {
 }
 
 export default function ScannerTab({ enabled, tabResults, onToggle, onDecrypt }: ScannerTabProps) {
+  const totalFound = tabResults.results.length + tabResults.textResults.length;
+
   return (
     <>
       <div className="px-5 py-3 bg-slate-800/50 border-b border-slate-700/50 flex items-center justify-between">
@@ -36,13 +45,13 @@ export default function ScannerTab({ enabled, tabResults, onToggle, onDecrypt }:
             </span>
           </div>
           <span className="text-xs text-slate-500">
-            {tabResults.imageCount} image{tabResults.imageCount !== 1 ? 's' : ''} checked
+            {tabResults.imageCount} img{tabResults.imageCount !== 1 ? 's' : ''} / {tabResults.textElementCount} text
           </span>
         </div>
         <div className="flex items-center gap-3">
-          {tabResults.results.length > 0 && (
+          {totalFound > 0 && (
             <span className="text-xs font-medium text-teal-400">
-              {tabResults.results.length} QR found
+              {totalFound} found
             </span>
           )}
           <Toggle enabled={enabled} onChange={onToggle} />
@@ -50,17 +59,17 @@ export default function ScannerTab({ enabled, tabResults, onToggle, onDecrypt }:
       </div>
 
       <div className="max-h-[340px] overflow-y-auto">
-        {tabResults.results.length === 0 ? (
+        {totalFound === 0 ? (
           <div className="px-5 py-10 text-center">
             <ScanLine className="w-10 h-10 text-slate-600 mx-auto mb-3" />
             <p className="text-sm text-slate-400">
               {enabled
-                ? 'No QR codes detected on this page'
-                : 'Enable scanning to detect QR codes'}
+                ? 'No QR codes or encrypted text detected'
+                : 'Enable scanning to detect QR codes & text'}
             </p>
             <p className="text-xs text-slate-500 mt-1">
               {enabled
-                ? 'QR codes will appear here when found'
+                ? 'Results will appear here when found'
                 : 'Toggle the switch above to start'}
             </p>
           </div>
@@ -68,9 +77,19 @@ export default function ScannerTab({ enabled, tabResults, onToggle, onDecrypt }:
           <div className="divide-y divide-slate-700/50">
             {tabResults.results.map((result, i) => (
               <ScanResult
-                key={`${result.data}-${i}`}
+                key={`qr-${result.data}-${i}`}
                 data={result.data}
                 index={i}
+                type="qr"
+                onDecrypt={onDecrypt}
+              />
+            ))}
+            {tabResults.textResults.map((result, i) => (
+              <ScanResult
+                key={`text-${result.data.slice(0, 20)}-${i}`}
+                data={result.data}
+                index={i}
+                type="text"
                 onDecrypt={onDecrypt}
               />
             ))}

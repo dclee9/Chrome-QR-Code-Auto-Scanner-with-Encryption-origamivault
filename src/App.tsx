@@ -8,9 +8,16 @@ interface QrResult {
   imageUrl: string;
 }
 
+interface TextResult {
+  data: string;
+  source: 'text';
+}
+
 interface TabResults {
   results: QrResult[];
+  textResults: TextResult[];
   imageCount: number;
+  textElementCount: number;
   scanning: boolean;
 }
 
@@ -23,7 +30,9 @@ function App() {
   const [enabled, setEnabled] = useState(false);
   const [tabResults, setTabResults] = useState<TabResults>({
     results: [],
+    textResults: [],
     imageCount: 0,
+    textElementCount: 0,
     scanning: false,
   });
   const [loading, setLoading] = useState(true);
@@ -142,9 +151,9 @@ function App() {
           >
             <ScanLine className="w-3 h-3" />
             Scanner
-            {tabResults.results.length > 0 && (
+            {(tabResults.results.length + tabResults.textResults.length) > 0 && (
               <span className="bg-teal-500/20 text-teal-400 text-[9px] px-1.5 py-0.5 rounded-full font-semibold min-w-[18px] text-center">
-                {tabResults.results.length}
+                {tabResults.results.length + tabResults.textResults.length}
               </span>
             )}
           </button>
