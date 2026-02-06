@@ -41,6 +41,7 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [outputCopied, setOutputCopied] = useState(false);
+  const [autoCopiedBanner, setAutoCopiedBanner] = useState(false);
   const [error, setError] = useState('');
   const [processing, setProcessing] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
@@ -177,12 +178,16 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
 
     setError('');
     setOutput('');
+    setAutoCopiedBanner(false);
     setProcessing(true);
 
     try {
       if (mode === 'encrypt') {
         const result = await encrypt(input.trim(), key);
         setOutput(result);
+        await navigator.clipboard.writeText(result);
+        setAutoCopiedBanner(true);
+        setTimeout(() => setAutoCopiedBanner(false), 3000);
       } else {
         const result = await decrypt(input.trim(), key);
         setOutput(result);
@@ -195,6 +200,13 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
       );
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.shiftKey && e.key === 'Enter' && mode === 'encrypt') {
+      e.preventDefault();
+      handleProcess();
     }
   };
 
@@ -372,16 +384,22 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
       </div>
 
       <div className="mb-3">
-        <label className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-          {mode === 'encrypt' ? (
-            <><ArrowDownToLine className="w-3 h-3" /> Plaintext</>
-          ) : (
-            <><ArrowUpFromLine className="w-3 h-3" /> Ciphertext</>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-[10px] font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+            {mode === 'encrypt' ? (
+              <><ArrowDownToLine className="w-3 h-3" /> Plaintext</>
+            ) : (
+              <><ArrowUpFromLine className="w-3 h-3" /> Ciphertext</>
+            )}
+          </label>
+          {mode === 'encrypt' && (
+            <span className="text-[9px] text-slate-500">Shift+Enter to encrypt</span>
           )}
-        </label>
+        </div>
         <textarea
           value={input}
           onChange={(e) => { setInput(e.target.value); setError(''); }}
+          onKeyDown={handleKeyDown}
           placeholder={mode === 'encrypt' ? 'Text to encrypt...' : 'Paste encrypted text or upload a QR image above...'}
           rows={3}
           className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/20 transition-colors resize-none font-mono leading-relaxed"
@@ -409,6 +427,13 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
         )}
         {processing ? 'Processing...' : mode === 'encrypt' ? 'Encrypt' : 'Decrypt'}
       </button>
+
+      {autoCopiedBanner && (
+        <div className="mt-2 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-teal-500/10 border border-teal-500/25 text-xs text-teal-300 animate-fade-in">
+          <Check className="w-3.5 h-3.5" />
+          Copied to clipboard
+        </div>
+      )}
 
       {output && (
         <div className="mt-3">

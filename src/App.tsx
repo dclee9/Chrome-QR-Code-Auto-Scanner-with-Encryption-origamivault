@@ -122,6 +122,17 @@ function App() {
 
         <div className="flex rounded-lg bg-slate-800/80 p-0.5">
           <button
+            onClick={() => setActiveTab('crypto')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+              activeTab === 'crypto'
+                ? 'bg-slate-700/80 text-teal-300 shadow-sm'
+                : 'text-slate-400 hover:text-slate-300'
+            }`}
+          >
+            <ShieldCheck className="w-3 h-3" />
+            Crypto
+          </button>
+          <button
             onClick={() => setActiveTab('scanner')}
             className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${
               activeTab === 'scanner'
@@ -136,17 +147,6 @@ function App() {
                 {tabResults.results.length}
               </span>
             )}
-          </button>
-          <button
-            onClick={() => setActiveTab('crypto')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${
-              activeTab === 'crypto'
-                ? 'bg-slate-700/80 text-teal-300 shadow-sm'
-                : 'text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            <ShieldCheck className="w-3 h-3" />
-            Crypto
           </button>
         </div>
       </div>
