@@ -458,7 +458,12 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
         ) : (
           <Unlock className="w-3.5 h-3.5" />
         )}
-        {processing ? 'Processing...' : mode === 'encrypt' ? 'Encrypt' : 'Decrypt'}
+        {processing ? 'Processing...' : mode === 'encrypt' ? (
+          <span className="flex items-center gap-1.5">
+            Encrypt
+            <span className="text-[9px] font-normal text-teal-400/50">(Shift+Enter to Encrypt & Auto-Copy)</span>
+          </span>
+        ) : 'Decrypt'}
       </button>
 
       {autoCopiedBanner && (
