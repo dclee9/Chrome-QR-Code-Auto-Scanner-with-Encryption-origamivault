@@ -269,13 +269,24 @@ export default function CryptoTab({ initialDecryptText, onDecryptTextConsumed }:
     setError('');
   };
 
-  const switchMode = (newMode: Mode) => {
+  const switchMode = async (newMode: Mode) => {
     setMode(newMode);
     setInput('');
     setOutput('');
     setError('');
     setQrFileName(null);
     lastAutoDecryptedRef.current = '';
+
+    if (newMode === 'decrypt') {
+      try {
+        const clip = await navigator.clipboard.readText();
+        if (clip && looksLikeCiphertext(clip.trim())) {
+          setInput(clip.trim());
+        }
+      } catch {
+        // clipboard access denied — ignore
+      }
+    }
   };
 
   return (
